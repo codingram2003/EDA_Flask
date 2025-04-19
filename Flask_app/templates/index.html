@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Op-Amp Parameter Generator</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            padding: 20px;
+        }
+        .result-container {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            display: none;
+        }
+        .parameter-card {
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">Op-Amp Parameter Generator</h1>
+        <p class="lead">Enter the desired gain value to generate optimal W and L parameters for your op-amp design.</p>
+        
+        <form id="prediction-form" class="mb-4">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="gain" class="form-label">Gain (dB)</label>
+                        <input type="number" class="form-control" id="gain" name="gain" step="any" required>
+                        <div class="form-text">Enter the desired gain value in decibels (dB)</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ugbw" class="form-label">UGBW (Hz)</label>
+                        <input type="number" class="form-control" id="ugbw" name="ugbw" step="any" required>
+                        <div class="form-text">Enter the Unity Gain Bandwidth in Hz</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="phase_db" class="form-label">Phase Margin (degrees)</label>
+                        <input type="number" class="form-control" id="phase_db" name="phase_db" step="any" required>
+                        <div class="form-text">Enter the Phase Margin in degrees</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="area" class="form-label">Area (m²)</label>
+                        <input type="number" class="form-control" id="area" name="area" step="any" required>
+                        <div class="form-text">Enter the desired area in square meters</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="slew_rate" class="form-label">Slew Rate (V/s)</label>
+                        <input type="number" class="form-control" id="slew_rate" name="slew_rate" step="any" required>
+                        <div class="form-text">Enter the desired slew rate in V/s</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="power_dis" class="form-label">Power Dissipation (W)</label>
+                        <input type="number" class="form-control" id="power_dis" name="power_dis" step="any" required>
+                        <div class="form-text">Enter the power dissipation in Watts</div>
+                    </div>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Generate Parameters</button>
+        </form>
+        
+        <div id="result-container" class="result-container">
+            <h3>Generated Parameters</h3>
+            <p>These parameters are optimized for a gain of <span id="input-gain"></span> dB:</p>
+            
+            <div class="row" id="parameters-container">
+                <!-- Parameters will be inserted here -->
+            </div>
+            
+            <div class="mt-4">
+                <button id="copy-button" class="btn btn-outline-secondary">Copy All Parameters</button>
+                <button id="download-button" class="btn btn-outline-primary ms-2">Download as CSV</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('prediction-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                gain: parseFloat(document.getElementById('gain').value),
+                ugbw: parseFloat(document.getElementById('ugbw').value),
+                phase_db: parseFloat(document.getElementById('phase_db').value),
+                area: parseFloat(document.getElementById('area').value),
+                slew_rate: parseFloat(document.getElementById('slew_rate').value),
+                power_dis: parseFloat(document.getElementById('power_dis').value)
+            };
+            
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                // Display results
+                document.getElementById('result-container').style.display = 'block';
+                
+                // Update input values display
+                document.getElementById('input-gain').textContent = result.input.gain;
+                
+                // Clear previous parameters
+                const parametersContainer = document.getElementById('parameters-container');
+                parametersContainer.innerHTML = '';
+                
+                // Add each parameter to the display
+                for (const [key, value] of Object.entries(result.parameters)) {
+                    const col = document.createElement('div');
+                    col.className = 'col-md-3 mb-3';
+                    
+                    const card = document.createElement('div');
+                    card.className = 'card h-100';
+                    
+                    const cardBody = document.createElement('div');
+                    cardBody.className = 'card-body';
+                    
+                    const title = document.createElement('h5');
+                    title.className = 'card-title';
+                    title.textContent = key;
+                    
+                    const valueElem = document.createElement('p');
+                    valueElem.className = 'card-text';
+                    
+                    // Format the value based on parameter type
+                    let formattedValue;
+                    if (key.startsWith('L')) {
+                        // Length in nanometers (e-9)
+                        formattedValue = `${value.toFixed(3)} nm`; // Already in nm
+                    } else if (key.startsWith('W')) {
+                        // Width in micrometers (e-6)
+                        formattedValue = `${value.toFixed(3)} μm`; // Already in μm
+                    } else if (key === 'IB') {
+                        // Current in microamperes
+                        formattedValue = `${value.toFixed(3)} μA`; // Already in μA
+                    } else if (key === 'CC') {
+                        // Capacitance in picofarads
+                        formattedValue = `${value.toFixed(3)} pF`; // Already in pF
+                    } else if (key === 'power_dis') {
+                        // Power in microwatts
+                        formattedValue = `${value.toFixed(3)} μW`; // Already in μW
+                    } else {
+                        // Default format for other parameters
+                        formattedValue = value.toExponential(6);
+                    }
+                    
+                    valueElem.textContent = formattedValue;
+                    
+                    cardBody.appendChild(title);
+                    cardBody.appendChild(valueElem);
+                    card.appendChild(cardBody);
+                    col.appendChild(card);
+                    
+                    parametersContainer.appendChild(col);
+                }
+                
+                // Setup copy button
+                document.getElementById('copy-button').onclick = function() {
+                    let text = '';
+                    for (const [key, value] of Object.entries(result.parameters)) {
+                        let formattedValue;
+                        if (key.startsWith('L')) {
+                            formattedValue = `${value.toFixed(3)} nm`;
+                        } else if (key.startsWith('W')) {
+                            formattedValue = `${value.toFixed(3)} μm`;
+                        } else if (key === 'IB') {
+                            formattedValue = `${value.toFixed(3)} μA`;
+                        } else if (key === 'CC') {
+                            formattedValue = `${value.toFixed(3)} pF`;
+                        } else if (key === 'power_dis') {
+                            formattedValue = `${value.toFixed(3)} μW`;
+                        } else {
+                            formattedValue = value.toExponential(6);
+                        }
+                        text += `${key}: ${formattedValue}\n`;
+                    }
+                    
+                    navigator.clipboard.writeText(text)
+                        .then(() => alert('Parameters copied to clipboard!'))
+                        .catch(err => console.error('Error copying text: ', err));
+                };
+                
+                // Setup download button
+                document.getElementById('download-button').onclick = function() {
+                    let csvContent = 'Parameter,Value,Formatted Value\n';
+                    for (const [key, value] of Object.entries(result.parameters)) {
+                        let formattedValue;
+                        if (key.startsWith('L')) {
+                            formattedValue = `${value.toFixed(3)} nm`;
+                        } else if (key.startsWith('W')) {
+                            formattedValue = `${value.toFixed(3)} μm`;
+                        } else if (key === 'IB') {
+                            formattedValue = `${value.toFixed(3)} μA`;
+                        } else if (key === 'CC') {
+                            formattedValue = `${value.toFixed(3)} pF`;
+                        } else if (key === 'power_dis') {
+                            formattedValue = `${value.toFixed(3)} μW`;
+                        } else {
+                            formattedValue = value.toExponential(6);
+                        }
+                        csvContent += `${key},${value},${formattedValue}\n`;
+                    }
+                    
+                    const blob = new Blob([csvContent], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.setAttribute('href', url);
+                    a.setAttribute('download', `opamp_params_gain_${result.input.gain}.csv`);
+                    a.click();
+                };
+                
+            } catch (error) {
+                alert('Error: ' + error.message);
+                console.error('Error:', error);
+            }
+        });
+    </script>
+</body>
+</html>
+
+
+
+
+
