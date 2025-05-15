@@ -12,7 +12,7 @@ from sklearn.ensemble import RandomForestRegressor
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 # Load the model
-MODEL_PATH = 'random_forest_model.pkl'
+MODEL_PATH = 'NN2.pkl'
 
 def load_model():
     if os.path.exists(MODEL_PATH):
